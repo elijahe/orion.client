@@ -130,6 +130,18 @@ define('orion/editor/edit', [ //$NON-NLS-0$
 	}
 	
 	/**	@private */
+	function getParents(document, className) {
+		if (document.getElementsByClassName) {
+			return document.getElementsByClassName(className);
+		}
+		className = className.replace(/ *$/, '');
+		if (document.querySelectorAll) {
+			return document.querySelectorAll((' ' + className).replace(/ +/g, '.')); //$NON-NLS-1$ //$NON-NLS-0$
+		}
+		return null;
+	}
+	
+	/**	@private */
 	function getHeight(node) {
 		return node.clientHeight;
 	}
@@ -155,6 +167,7 @@ define('orion/editor/edit', [ //$NON-NLS-0$
 	 * @property {Boolean} [showAnnotationRuler=true] whether or not the annotation ruler is shown.
 	 * @property {Boolean} [showOverviewRuler=true] whether or not the overview ruler is shown.
 	 * @property {Boolean} [showFoldingRuler=true] whether or not the folding ruler is shown.
+	 * @property {Boolean} [noFocus=false] whether or not to focus the editor on creation.
 	 * @property {Number} [firstLineIndex=1] the line index displayed for the first line of text.
 	 */
 	/**
@@ -163,18 +176,21 @@ define('orion/editor/edit', [ //$NON-NLS-0$
 	 * @param {orion.editor.EditOptions} options the editor options.
 	 */
 	function edit(options) {
+		var doc = options.document || document;
 		var parent = options.parent;
 		if (!parent) { parent = "editor"; } //$NON-NLS-0$
 		if (typeof(parent) === "string") { //$NON-NLS-0$
-			parent = (options.document || document).getElementById(parent);
+			parent = doc.getElementById(parent);
 		}
 		if (!parent) {
 			if (options.className) {
-				var parents = (options.document || document).getElementsByClassName(options.className);
+				var parents = getParents(doc, options.className);
 				if (parents) {
 					options.className = undefined;
+					// Do not focus editors by default when creating multiple editors
+					if (parents.length > 1 && options.noFocus === undefined) { options.noFocus = true; }
 					var editors = [];
-					for (var i = 0; i < parents.length; i++) {
+					for (var i = parents.length - 1; i >= 0; i--) {
 						options.parent = parents[i];
 						editors.push(edit(options));
 					}
@@ -295,7 +311,7 @@ define('orion/editor/edit', [ //$NON-NLS-0$
 		editor.setAnnotationRulerVisible(options.showAnnotationRuler === undefined || options.showFoldingRuler);
 		editor.setOverviewRulerVisible(options.showOverviewRuler === undefined || options.showOverviewRuler);
 		editor.setFoldingRulerVisible(options.showFoldingRuler === undefined || options.showFoldingRuler);
-		editor.setInput(options.title, null, contents);
+		editor.setInput(options.title, null, contents, false, options.noFocus);
 		
 		syntaxHighlighter.highlight(options.lang, editor);
 		if (contentAssist) {

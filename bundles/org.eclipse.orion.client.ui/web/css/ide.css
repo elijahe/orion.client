@@ -981,6 +981,7 @@ td .orionMarkdown {
 	width: 70%;
 	margin-left: 0;
 	position: absolute;
+	min-height: 15px;
 }
 
 .orionProject .discreetInput:hover, .orionProject .discreetInput:focus {

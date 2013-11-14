@@ -37,6 +37,10 @@
 	border: 0;
 }
 
+.inlineRulerLeft {
+	border-right: 1px solid #EAEAEA;
+}
+
 .compareEditorParent {
 	clear: both;
 	overflow: hidden;
@@ -46,6 +50,10 @@
     left: 0;
     width: 100%;
 	margin-bottom: 30px;  /* $Editor line number div height */   
+}
+
+.compareEditorParentImageMode {
+	overflow: auto !important;
 }
 
 .compareEditorParentWithCanvas {

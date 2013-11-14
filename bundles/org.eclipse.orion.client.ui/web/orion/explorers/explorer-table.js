@@ -197,6 +197,10 @@ define(['i18n!orion/navigate/nls/messages', 'require', 'orion/Deferred', 'orion/
 		mExplorer.Explorer.prototype.destroy.call(this);
 	};
 
+	FileExplorer.prototype.onCreate = function(modelEvent) {
+		return this.changedItem(modelEvent.parent, true, modelEvent.newValue);
+	};
+	
 	/**
 	 * Handles model changes. Subclasses can override these methods to control how the FileExplorer reacts to various types of model changes.
 	 * The default implementations generally just refresh the affected row(s) in the explorer.
@@ -221,7 +225,7 @@ define(['i18n!orion/navigate/nls/messages', 'require', 'orion/Deferred', 'orion/
 		},
 		create: function(modelEvent) {
 			// refresh the node
-			this.changedItem(modelEvent.parent, true, modelEvent.newValue);
+			this.onCreate(modelEvent);
 		},
 		"delete": function(modelEvent) { //$NON-NLS-0$
 			// Handled by deleteMultiple
@@ -413,12 +417,20 @@ define(['i18n!orion/navigate/nls/messages', 'require', 'orion/Deferred', 'orion/
 
 			var drop = function(evt) {
 				node.classList.remove("dragOver"); //$NON-NLS-0$
-				
 				if (dragStartTarget) {
 					var fileClient = explorer.fileClient;
-					var location = dragStartTarget.href;
-					var index = location.indexOf("#"); //$NON-NLS-0$
-					location = location.substring(index + 1);
+					var tmp = dragStartTarget;
+					var location;
+					while (tmp) {
+						if (tmp._item) {
+							location = tmp._item.Location;
+							break;
+						}
+						tmp = tmp.parentNode;
+					}
+					if (!location) {
+						return;
+					}
 					var progress = explorer.registry.getService("orion.page.progress"); //$NON-NLS-0$
 					progress.showWhile(fileClient.copyFile(location, item.Location), i18nUtil.formatMessage(messages["Copying ${0}"], location)).then(function(result) {
 						explorer.changedItem(item, true);
@@ -642,7 +654,11 @@ define(['i18n!orion/navigate/nls/messages', 'require', 'orion/Deferred', 'orion/
 					}
 				}
 				
+				var deferred = new Deferred();
 				self.createTree(self.parentId, self.model, {
+					onComplete: function(tree) {
+						deferred.resolve(tree);
+					},
 					navHandlerFactory: self.navHandlerFactory,
 					setFocus: (typeof self.setFocus === "undefined" ? true : self.setFocus), //$NON-NLS-0$
 					selectionPolicy: self.renderer.selectionPolicy, 
@@ -653,19 +669,21 @@ define(['i18n!orion/navigate/nls/messages', 'require', 'orion/Deferred', 'orion/
 					}
 				});
 				
-				if (typeof postLoad === "function") { //$NON-NLS-0$
-					try {
-						postLoad();
-					} catch(e){
-						if (self.registry) {
-							self.registry.getService("orion.page.message").setErrorMessage(e);	 //$NON-NLS-0$
+				return deferred.then(function() {
+					if (typeof postLoad === "function") { //$NON-NLS-0$
+						try {
+							postLoad();
+						} catch(e){
+							if (self.registry) {
+								self.registry.getService("orion.page.message").setErrorMessage(e);	 //$NON-NLS-0$
+							}
 						}
+					}				
+					if (typeof self.onchange === "function") { //$NON-NLS-0$
+						self.onchange(self.treeRoot);
 					}
-				}				
-				if (typeof self.onchange === "function") { //$NON-NLS-0$
-					self.onchange(self.treeRoot);
-				}
-				return new Deferred().resolve(self.treeRoot);
+					return self.treeRoot;
+				});
 			},
 			function(error) {
 				clearTimeout(progressTimeout);
