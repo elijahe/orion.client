@@ -532,7 +532,8 @@ define([
 					editor.getModel().addEventListener("Changing", this._changingListener = this.onChanging.bind(this)); //$NON-NLS-0$
 				}
 				if (!noSetInput) {
-					editor.setInput(title, null, contents);
+					var noFocus = this.fileClient.getRenameInProgress(); // don't switch focus to editor if a file or folder rename is currently in progress
+					editor.setInput(title, null, contents, undefined, noFocus);
 				}
 				this._unsavedChanges = [];
 				this.processParameters(input);

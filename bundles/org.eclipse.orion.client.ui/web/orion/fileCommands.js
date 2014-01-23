@@ -542,6 +542,57 @@ define(['i18n!orion/navigate/nls/messages', 'require', 'orion/webui/littlelib', 
 		function checkFolderSelection(item) {
 			return getTargetFolder(explorer.selection.getSelections()) || getTargetFolder(item);
 		}
+		
+		function doMove(item, newText) {
+			var moveLocation = item.Location;
+			Deferred.when(getLogicalModelItems(item), function(logicalItems) {
+				item = logicalItems.item;
+				var parent = logicalItems.parent;
+				if (parent && parent.Projects) {
+					//special case for moving a project. We want to move the project rather than move the project's content
+					parent.Projects.some(function(project) {
+						if (project.Id === item.Id) {
+							moveLocation = project.Location;
+							return true;
+						}
+						return false;
+					});
+				}
+				var deferred = fileClient.moveFile(moveLocation, parent.Location, newText);
+				progressService.showWhile(deferred, i18nUtil.formatMessage(messages["Renaming ${0}"], moveLocation)).then(
+					function(newItem) {
+						if (!item.parent) {
+							item.parent = parent;
+						}
+						dispatchModelEvent({ type: "move", oldValue: item, newValue: newItem, parent: parent }); //$NON-NLS-0$
+					},
+					errorHandler
+				);
+			});
+		}
+		
+		var editAndRename = function(item, data) {
+			// we want to popup the edit box over the name in the explorer.
+			// if we can't find it, we'll pop it up over the command dom element.
+			var refNode = explorer.getNameNode(item);
+			if (!refNode) {
+				if (!data) {
+					return;
+				}
+				refNode = data.domParent || data.domNode;
+			}
+			var id = refNode.id+"EditBox"; //$NON-NLS-0$
+			if (lib.node(id)) {
+				return;
+			}
+			
+			var resetRenameFlag = function() {
+				fileClient.setRenameInProgress(false);
+			};
+			fileClient.setRenameInProgress(true);
+			
+			mUIUtils.getUserText(id, refNode, true, item.Name, doMove.bind(null, item), resetRenameFlag, null, item.Directory ? "" : ".");  //$NON-NLS-1$ //$NON-NLS-0$
+		};
 
 		var renameCommand = new mCommands.Command({
 				name: messages["Rename"],
@@ -568,45 +619,12 @@ define(['i18n!orion/navigate/nls/messages', 'require', 'orion/webui/littlelib', 
 					}),
 				callback: function(data) {
 					var item = forceSingleItem(data.items);
-					function doMove(newText) {
-						var moveLocation = item.Location;
-						Deferred.when(getLogicalModelItems(item), function(logicalItems) {
-							item = logicalItems.item;
-							var parent = logicalItems.parent;
-							if (parent && parent.Projects) {
-								//special case for moving a project. We want to move the project rather than move the project's content
-								parent.Projects.some(function(project) {
-									if (project.Id === item.Id) {
-										moveLocation = project.Location;
-										return true;
-									}
-									return false;
-								});
-							}
-							var deferred = fileClient.moveFile(moveLocation, parent.Location, newText);
-							progressService.showWhile(deferred, i18nUtil.formatMessage(messages["Renaming ${0}"], moveLocation)).then(
-								function(newItem) {
-									dispatchModelEvent({ type: "move", oldValue: item, newValue: newItem, parent: parent }); //$NON-NLS-0$
-								},
-								errorHandler
-							);
-						});
-					}
+					
 					var name;
 					if (data.parameters.hasParameters() && (name = data.parameters.valueFor("name")) !== null) { //$NON-NLS-0$
-						doMove(name);
+						doMove(item, name);
 					} else {
-						// we want to popup the edit box over the name in the explorer.
-						// if we can't find it, we'll pop it up over the command dom element.
-						var refNode = explorer.getNameNode(item);
-						if (!refNode) {
-							refNode = data.domParent || data.domNode;
-						}
-						var id = refNode.id+"EditBox"; //$NON-NLS-0$
-						if (lib.node(id)) {
-							return;
-						}
-						mUIUtils.getUserText(id, refNode, true, item.Name, doMove, null, null, item.Directory ? "" : ".");  //$NON-NLS-1$ //$NON-NLS-0$
+						editAndRename(item, data);
 					}
 				}
 			});
@@ -743,66 +761,92 @@ define(['i18n!orion/navigate/nls/messages', 'require', 'orion/webui/littlelib', 
 		});
 		commandService.addCommand(downloadCommand);
 		
-		var newFileNameParameters = new mCommandRegistry.ParametersDescription([new mCommandRegistry.CommandParameter('name', 'text', messages['Name:'], messages['New File'])]); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+		/**
+		 * Creates a new file or folder as a child of the specified parentItem.
+		 */
+		function createNewArtifact(defaultName, parentItem, isDirectory) {
+			var createFunction = function(name) {
+				if (name) {
+					var deferred = isDirectory ? fileClient.createFolder(parentItem.Location, name) : fileClient.createFile(parentItem.Location, name);
+					progressService.showWhile(deferred, i18nUtil.formatMessage(messages["Creating ${0}"], name)).then(
+						function(newArtifact) {
+							dispatchModelEvent({ type: "create", parent: parentItem, newValue: newArtifact }); //$NON-NLS-0$
+
+							var createEventListener = function(event){
+								var newValue = event.newValue;
+								editAndRename(newValue, null);
+								explorer.sidebarNavInputManager.removeEventListener("create", createEventListener);  //$NON-NLS-0$
+							};
+							
+							if (explorer.sidebarNavInputManager) {
+								// wait for explorer.sidebarNavInputManager to signal that the file has been created
+								explorer.sidebarNavInputManager.addEventListener("create", createEventListener);  //$NON-NLS-0$	
+							}
+						},
+						errorHandler);
+				}
+			};
+			
+			// get the list of files that already exists in the selected directory and ensure 
+			// that the new file's initial name is unique within that directory
+			progressService.progress(fileClient.fetchChildren(parentItem.ChildrenLocation), messages["Fetching children of "] + parentItem.Name).then( //$NON-NLS-0$
+				function(children) {
+					var attempt = 0;
+					var uniqueName = defaultName;
+					var possibleCollidingNames = [];
+					
+					// find a unique name for the new artifact
+					children.forEach(function(child){
+						var childName = child.Name;
+						if (0 === childName.indexOf(uniqueName)) {
+							if (uniqueName.length === childName.length) {
+								// uniqueName matches child.Name exactly, modify uniqueName 
+								// no need to stash childName away as a possible collision since 
+								// uniqueName will be modified and never again equal to it
+								do {
+									attempt++;
+									uniqueName = defaultName + " (" + attempt + ")";  //$NON-NLS-1$ //$NON-NLS-0$
+								} while (-1 !== possibleCollidingNames.indexOf(uniqueName));
+							} else {
+								// uniqueName matches the beginning of child.Name 
+								// stash child.Name away as a possible collision
+								possibleCollidingNames.push(childName);	
+							}
+						}
+					});
+					
+					// create the artifact
+					createFunction(uniqueName);
+				},
+				errorHandler);
+		};
 		
 		var newFileCommand = new mCommands.Command({
 			name: messages["New File"],
 			tooltip: messages["Create a new file"],
 			imageClass: "core-sprite-new_file", //$NON-NLS-0$
 			id: "eclipse.newFile" + idSuffix, //$NON-NLS-0$
-			parameters: newFileNameParameters,
 			callback: function(data) {
 				// Check selection service first, then use the provided item
 				explorer.selection.getSelections(function(selections) {
 					var item = getTargetFolder(selections) || getTargetFolder(data.items);
-					var createFunction = function(name) {
-						if (name) {
-							var deferred = fileClient.createFile(item.Location, name);
-							progressService.showWhile(deferred, i18nUtil.formatMessage(messages["Creating ${0}"], name)).then(
-								function(newFile) {
-									dispatchModelEvent({ type: "create", parent: item, newValue: newFile }); //$NON-NLS-0$
-								},
-								errorHandler);
-						}
-					};
-					if (data.parameters && data.parameters.valueFor('name')) { //$NON-NLS-0$
-						createFunction(data.parameters.valueFor('name')); //$NON-NLS-0$
-					} else {
-						getNewItemName(explorer, item, data.domNode.id, messages['New File'], createFunction);
-					}
+					createNewArtifact(messages["New File"], item, false);
 				});
 			},
 			visibleWhen: checkFolderSelection
 		});
 		commandService.addCommand(newFileCommand);
 		
-		var newFolderNameParameters = new mCommandRegistry.ParametersDescription([new mCommandRegistry.CommandParameter('name', 'text', messages['Folder name:'], messages['New Folder'])]); //$NON-NLS-1$ //$NON-NLS-0$
-
 		var newFolderCommand = new mCommands.Command({
 			name: messages['New Folder'],
 			tooltip: messages["Create a new folder"],
 			imageClass: "core-sprite-new_folder", //$NON-NLS-0$
 			id: "eclipse.newFolder" + idSuffix, //$NON-NLS-0$
-			parameters: newFolderNameParameters,
 			callback: function(data) {
 				// Check selection service first, then use the provided item
 				explorer.selection.getSelections(function(selections) {
 					var item = getTargetFolder(selections) || getTargetFolder(data.items);
-					var createFunction = function(name) {
-						if (name) {
-							var deferred = fileClient.createFolder(item.Location, name);
-							progressService.showWhile(deferred, i18nUtil.formatMessage(messages["Creating ${0}"], name)).then(
-								function(newFolder) {
-									dispatchModelEvent({ type: "create", parent: item, newValue: newFolder }); //$NON-NLS-0$
-								},
-								errorHandler);
-						}
-					};
-					if (data.parameters && data.parameters.valueFor('name')) { //$NON-NLS-0$
-						createFunction(data.parameters.valueFor('name')); //$NON-NLS-0$
-					} else {
-						getNewItemName(explorer, item, data.domNode.id, messages['New Folder'], createFunction);
-					}
+					createNewArtifact(messages["New Folder"], item, true);
 				});
 			},
 			visibleWhen: function(item) {
@@ -840,7 +884,6 @@ define(['i18n!orion/navigate/nls/messages', 'require', 'orion/webui/littlelib', 
 		
 		var newProjectCommand = new mCommands.Command({
 			name: messages["New Folder"],
-			parameters: newFolderNameParameters,
 			imageClass: "core-sprite-new_folder", //$NON-NLS-0$
 			tooltip: messages["Create an empty folder"],
 			description: messages["Create an empty folder on the Orion server.  You can import, upload, or create content in the editor."],
@@ -856,7 +899,7 @@ define(['i18n!orion/navigate/nls/messages', 'require', 'orion/webui/littlelib', 
 						if (data.parameters && data.parameters.valueFor('name')) { //$NON-NLS-0$
 							createProject(explorer, fileClient, progressService, data.parameters.valueFor('name')); //$NON-NLS-0$
 						} else {
-							getNewItemName(data.items, data.domNode.id, messages['New Folder'], function(name) {
+							getNewItemName(explorer, item, data.domNode.id, messages['New Folder'], function(name) {
 								createProject(explorer, fileClient, progressService, name);
 							});
 						}
