@@ -342,21 +342,6 @@ define(['i18n!orion/navigate/nls/messages', "orion/Deferred", "orion/i18nUtil"],
 			});
 			
 		},
-		
-		/**
-		 * @return {Boolean} this instance's renameInProgress flag
-		 */
-		getRenameInProgress: function() {
-			return this._renameInProgress;
-		},
-		
-		/**
-		 * Sets this fileClient's renameInProgress flag.
-		 * @param {Boolean} renameInProgress
-		 */
-		setRenameInProgress: function(renameInProgress) {
-			this._renameInProgress = renameInProgress;
-		},
 				
 		/**
 		 * Copies a file or directory.
