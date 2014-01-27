@@ -174,27 +174,45 @@ define(['i18n!orion/navigate/nls/messages', 'require', 'orion/webui/littlelib', 
 	
 	function getNewItemName(explorer, item, domId, defaultName, onDone) {
 		var refNode, name, tempNode;
-		if (item.Location === explorer.treeRoot.Location) {
-			refNode = lib.node(domId);
+		var shouldHideRefNode = true;
+		var insertAsChild = false;
+		
+		var nodes = explorer.makeNewItemPlaceHolder(item, domId, null, true);
+		if (nodes) {
+			refNode = nodes.refNode;
+			tempNode = nodes.tempNode;
+			shouldHideRefNode = false;
+			insertAsChild = true;
 		} else {
-			var nodes = explorer.makeNewItemPlaceHolder(item, domId);
-			if (nodes) {
-				refNode = nodes.refNode;
-				tempNode = nodes.tempNode;
-			} else {
-				refNode = lib.node(domId);
-			}
+			refNode = lib.node(domId);
 		}
+
 		if (refNode) {
-			mUIUtils.getUserText(domId+"EditBox", refNode, false, defaultName,  //$NON-NLS-0$
-				function(name) { 
-					if (name) {
-						if (tempNode && tempNode.parentNode) {
-							tempNode.parentNode.removeChild(tempNode);
-						}
-						onDone(name);
-					}
-				}); 
+			var done = function(name) { 
+				if (name) {
+					onDone(name);
+				}
+			};
+			var destroy = function() {
+				try {
+					if (tempNode && tempNode.parentNode) {
+						tempNode.parentNode.removeChild(tempNode);
+					}	
+				} catch (err) {
+					// tempNode already removed, do nothing
+				}
+			};
+			
+			mUIUtils.getUserText({
+				id: domId+"EditBox", //$NON-NLS-0$
+				refNode: refNode,
+				shouldHideRefNode: shouldHideRefNode,
+				initialText: defaultName,
+				onComplete: done,
+				onEditDestroy: destroy,
+				isInitialValid: true,
+				insertAsChild: insertAsChild
+			});
 		} else {
 			name = window.prompt(defaultName);
 			if (name) {
@@ -586,12 +604,14 @@ define(['i18n!orion/navigate/nls/messages', 'require', 'orion/webui/littlelib', 
 				return;
 			}
 			
-			var resetRenameFlag = function() {
-				fileClient.setRenameInProgress(false);
-			};
-			fileClient.setRenameInProgress(true);
-			
-			mUIUtils.getUserText(id, refNode, true, item.Name, doMove.bind(null, item), resetRenameFlag, null, item.Directory ? "" : ".");  //$NON-NLS-1$ //$NON-NLS-0$
+			mUIUtils.getUserText({
+				id: id, 
+				refNode: refNode, 
+				shouldHideRefNode: true, 
+				initialText: item.Name,
+				onComplete: doMove.bind(null, item), 
+				selectTo: item.Directory ? "" : "." //$NON-NLS-1$ //$NON-NLS-0$
+			});
 		};
 
 		var renameCommand = new mCommands.Command({
@@ -760,65 +780,67 @@ define(['i18n!orion/navigate/nls/messages', 'require', 'orion/webui/littlelib', 
 			}
 		});
 		commandService.addCommand(downloadCommand);
-		
-		/**
-		 * Creates a new file or folder as a child of the specified parentItem.
-		 */
-		function createNewArtifact(defaultName, parentItem, isDirectory) {
-			var createFunction = function(name) {
-				if (name) {
-					var deferred = isDirectory ? fileClient.createFolder(parentItem.Location, name) : fileClient.createFile(parentItem.Location, name);
-					progressService.showWhile(deferred, i18nUtil.formatMessage(messages["Creating ${0}"], name)).then(
-						function(newArtifact) {
-							dispatchModelEvent({ type: "create", parent: parentItem, newValue: newArtifact }); //$NON-NLS-0$
 
-							var createEventListener = function(event){
-								var newValue = event.newValue;
-								editAndRename(newValue, null);
-								explorer.sidebarNavInputManager.removeEventListener("create", createEventListener);  //$NON-NLS-0$
-							};
-							
-							if (explorer.sidebarNavInputManager) {
-								// wait for explorer.sidebarNavInputManager to signal that the file has been created
-								explorer.sidebarNavInputManager.addEventListener("create", createEventListener);  //$NON-NLS-0$	
-							}
-						},
-						errorHandler);
-				}
-			};
-			
+		function createUniqueNameArtifact(parentItem, prefix, createFunction) {
 			// get the list of files that already exists in the selected directory and ensure 
 			// that the new file's initial name is unique within that directory
-			progressService.progress(fileClient.fetchChildren(parentItem.ChildrenLocation), messages["Fetching children of "] + parentItem.Name).then( //$NON-NLS-0$
+			var location = parentItem.ChildrenLocation;
+			progressService.progress(fileClient.fetchChildren(location), messages["Fetching children of "] + parentItem.Name).then( //$NON-NLS-0$
 				function(children) {
 					var attempt = 0;
-					var uniqueName = defaultName;
-					var possibleCollidingNames = [];
+					var uniqueName = prefix;
 					
 					// find a unique name for the new artifact
-					children.forEach(function(child){
-						var childName = child.Name;
-						if (0 === childName.indexOf(uniqueName)) {
-							if (uniqueName.length === childName.length) {
-								// uniqueName matches child.Name exactly, modify uniqueName 
-								// no need to stash childName away as a possible collision since 
-								// uniqueName will be modified and never again equal to it
-								do {
-									attempt++;
-									uniqueName = defaultName + " (" + attempt + ")";  //$NON-NLS-1$ //$NON-NLS-0$
-								} while (-1 !== possibleCollidingNames.indexOf(uniqueName));
-							} else {
-								// uniqueName matches the beginning of child.Name 
-								// stash child.Name away as a possible collision
-								possibleCollidingNames.push(childName);	
-							}
-						}
+					var possiblyCollidingNames = children.filter(function(child){
+						return 0 === child.Name.indexOf(prefix);
+					}).map(function(child){
+						return child.Name;
 					});
+					
+					while (-1 !== possiblyCollidingNames.indexOf(uniqueName)){
+						attempt++;
+						uniqueName = prefix.concat(" (").concat(attempt).concat(")");  //$NON-NLS-1$ //$NON-NLS-0$
+					}
 					
 					// create the artifact
 					createFunction(uniqueName);
 				},
 				errorHandler);
+		}		
+		
+		/**
+		 * Creates a new file or folder as a child of the specified parentItem.
+		 */
+		function createNewArtifact(namePrefix, parentItem, isDirectory) {
+			var createFunction = function(name) {
+				if (name) {
+					var location = parentItem.Location;
+					var functionName = isDirectory ? "createFolder" : "createFile";
+					var deferred = fileClient[functionName](location, name);
+					progressService.showWhile(deferred, i18nUtil.formatMessage(messages["Creating ${0}"], name)).then(
+						function(newArtifact) {
+							dispatchModelEvent({ type: "create", parent: parentItem, newValue: newArtifact }); //$NON-NLS-0$
+						},
+						errorHandler);
+				}
+			};
+			
+			createUniqueNameArtifact(parentItem, namePrefix, function(uniqueName){
+				getNewItemName(explorer, parentItem, explorer.getRow(parentItem), uniqueName, function(name) {
+					createFunction(name);
+				});
+			});
+		}
+		
+		var getParentItem = function(selections, items){
+			var item = getTargetFolder(selections);
+			if (!item) {
+				item = explorer.treeRoot;
+				if (item.Project) {
+					item = item.children[0];
+				}
+			}
+			return item;
 		};
 		
 		var newFileCommand = new mCommands.Command({
@@ -829,7 +851,7 @@ define(['i18n!orion/navigate/nls/messages', 'require', 'orion/webui/littlelib', 
 			callback: function(data) {
 				// Check selection service first, then use the provided item
 				explorer.selection.getSelections(function(selections) {
-					var item = getTargetFolder(selections) || getTargetFolder(data.items);
+					var item = getParentItem(selections);
 					createNewArtifact(messages["New File"], item, false);
 				});
 			},
@@ -845,7 +867,7 @@ define(['i18n!orion/navigate/nls/messages', 'require', 'orion/webui/littlelib', 
 			callback: function(data) {
 				// Check selection service first, then use the provided item
 				explorer.selection.getSelections(function(selections) {
-					var item = getTargetFolder(selections) || getTargetFolder(data.items);
+					var item = getParentItem(selections);
 					createNewArtifact(messages["New Folder"], item, true);
 				});
 			},
@@ -896,13 +918,12 @@ define(['i18n!orion/navigate/nls/messages', 'require', 'orion/webui/littlelib', 
 						newFolderCommand.callback(data);
 					} else {
 						item = forceSingleItem(data.items);
-						if (data.parameters && data.parameters.valueFor('name')) { //$NON-NLS-0$
-							createProject(explorer, fileClient, progressService, data.parameters.valueFor('name')); //$NON-NLS-0$
-						} else {
-							getNewItemName(explorer, item, data.domNode.id, messages['New Folder'], function(name) {
+						var defaultName = messages['New Folder']; //$NON-NLS-0$
+						createUniqueNameArtifact(item, defaultName, function(uniqueName){
+							getNewItemName(explorer, item, explorer.getRow(item), uniqueName, function(name) {
 								createProject(explorer, fileClient, progressService, name);
 							});
-						}
+						});
 					} 
 				});
 			},
