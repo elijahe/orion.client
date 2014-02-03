@@ -416,12 +416,22 @@ define(['require', 'orion/util', 'orion/webui/littlelib', 'orion/webui/dropdown'
 		return element;
 	}
 	
-	function createCommandMenuItem(parent, command, commandInvocation, keyBinding, callback) {
+	function appendKeyBindingString(element, keyBindingString) {
+		var span = document.createElement("span"); //$NON-NLS-0$
+		span.classList.add("dropdownKeyBinding"); //$NON-NLS-0$
+		span.appendChild(document.createTextNode(keyBindingString));
+		element.appendChild(span);
+	}
+	
+	function createCommandMenuItem(parent, command, commandInvocation, keyBinding, callback, keyBindingString) {
 		var element;
 		var dropdown = parent.dropdown;
 		if (command.hrefCallback) {
 			element = document.createElement("a"); //$NON-NLS-0$
-			element.appendChild(document.createTextNode(command.name));
+			var span = document.createElement("span");
+			span.appendChild(document.createTextNode(command.name));
+			span.classList.add("dropdownCommandName"); //$NON-NLS-0$
+			element.appendChild(span);
 			var href = command.hrefCallback.call(commandInvocation.handler, commandInvocation);
 			if (href.then){
 				href.then(function(l){
@@ -440,7 +450,10 @@ define(['require', 'orion/util', 'orion/webui/littlelib', 'orion/webui/dropdown'
 		} else {
 			element = document.createElement("span"); //$NON-NLS-0$
 			element.tabIndex = 0;
-			element.appendChild(document.createTextNode(command.name));
+			var span = document.createElement("span");
+			span.appendChild(document.createTextNode(command.name));
+			span.classList.add("dropdownCommandName"); //$NON-NLS-0$
+			element.appendChild(span);
 			var onClick = callback || command.callback;
 			if (onClick) {
 				command.onClick = onClick;
@@ -468,6 +481,9 @@ define(['require', 'orion/util', 'orion/webui/littlelib', 'orion/webui/dropdown'
 			});
 		}
 		
+		if (keyBindingString) {
+			appendKeyBindingString(element, keyBindingString);
+		}
 		var li = document.createElement("li"); //$NON-NLS-0$
 		parent.appendChild(li);
 		li.appendChild(element); //$NON-NLS-0$
