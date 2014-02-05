@@ -446,6 +446,10 @@ hard-coded numbers elsewhere.
 	z-index: 100;
 }
 
+.sideMenu:hover{
+	z-index: 100;
+}
+
 .sideMenu-maximized {
 	top: 0;
 	bottom: 0;
