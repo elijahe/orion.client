@@ -537,48 +537,74 @@ a.currentLocation:hover {
 	max-width: 40em;
 }
 .tooltip {
-	color: #fafafa;
-	background-color: #555;
+	color: gray;
+	background-color: white;
 	border-radius: 3px;
 	padding: 8px;
 	clear: both;
 	float: left;
+	border: 1px solid #dcd9df;
+	box-shadow: 0px 0px 10pt -2pt rgba(0, 0, 0, 0.5);
 }
 
 .tooltip.left {
 }
 
 .tooltip .navlinkonpage {
-	color: skyblue;
+	color: #00aed1;
 }
 
 .tooltip h2 {
-	color: #fafafa;
+	color: #3b4b54;
 }
 
 .tooltip .operationStatus {
-	color: skyblue;
+	color: #00aed1;
 }
 
 .tooltip .operationError {
-	color: orangered;
+	color: #f47d64;
 }
 
 .tooltipTailFromleft {
 	position: absolute;
 	display: inline-block;
-	border: 8px solid;
-	border-color: transparent transparent transparent #555;
-	top: 4px;
+	top: 14px;
 	content: '';
 	z-index: 201;
 }
+
+.tooltipTailFromleft:after, .tooltipTailFromleft:before {
+	left: -1px;
+	top: 50%;
+	border: solid transparent;
+	content: " ";
+	height: 0;
+	width: 0;
+	position: absolute;
+	pointer-events: none;
+}
+
+.tooltipTailFromleft:after {
+	border-color: rgba(0, 0, 0, 0);
+	border-left-color: white;
+	border-width: 8px;
+	margin-top: -8px;
+}
+
+.tooltipTailFromleft:before {
+	border-color: rgba(0, 0, 0, 0);
+	border-left-color: #dcd9df;
+	border-width: 9px;
+	margin-top: -9px;
+}
+
 
 .tooltipTailBorderFromleft {
 	position: absolute;
 	display: inline-block;
 	border: 10px solid;
-	border-color: transparent transparent transparent #555;
+	border-color: transparent transparent transparent white;
 	top: 2px;
 	right: -17px;
 	content: '';
@@ -587,19 +613,42 @@ a.currentLocation:hover {
 .tooltipTailFromright {
 	position: absolute;
 	display: inline-block;
-	border: 8px solid;
-	border-color: transparent #555 transparent transparent;
-	left: -15px;
-	top: 4px;
+	left: 0;
+	top: 14px;
 	content: '';
 	z-index: 201;
+}
+
+.tooltipTailFromright:after, .tooltipTailFromright:before {
+	right: -1px;
+	top: 50%;
+	border: solid transparent;
+	content: " ";
+	height: 0;
+	width: 0;
+	position: absolute;
+	pointer-events: none;
+}
+
+.tooltipTailFromright:after {
+	border-color: rgba(0, 0, 0, 0);
+	border-right-color: white;
+	border-width: 8px;
+	margin-top: -8px;
+}
+
+.tooltipTailFromright:before {
+	border-color: rgba(0, 0, 0, 0);
+	border-right-color: #dcd9df;
+	border-width: 9px;
+	margin-top: -9px;
 }
 
 .tooltipTailBorderFromright {
 	position: absolute;
 	display: inline-block;
 	border: 10px solid;
-	border-color: transparent #555 transparent transparent;
+	border-color: transparent white transparent transparent;
 	left: -17px;
 	top: 2px;
 	content: '';
@@ -608,19 +657,44 @@ a.currentLocation:hover {
 .tooltipTailFrombelow {
 	position: absolute;
 	display: block;
-	border: 8px solid;
-	border-color: transparent transparent #555 transparent;
 	left: 16px;
-	top: -15px;
+	top: 0;
 	content: '';
 	z-index: 201;
+}
+
+
+.tooltipTailFrombelow:after, .tooltipTailFrombelow:before {
+	bottom: -1px;
+	left: 50%;
+	border: solid transparent;
+	content: " ";
+	height: 0;
+	width: 0;
+	position: absolute;
+	pointer-events: none;
+}
+
+.tooltipTailFrombelow:after {
+	border-color: rgba(0, 0, 0, 0);
+	border-bottom-color: white;
+	border-width: 8px;
+	margin-left: -8px;
+}
+
+.tooltipTailFrombelow:before {
+	border-color: rgba(0, 0, 0, 0);
+	border-bottom-color: #dcd9df;
+	border-width: 9px;
+	margin-left: -9px;
+	top: -
 }
 
 .tooltipTailBorderFrombelow {
 	position: absolute;
 	display: block;
 	border: 10px solid;
-	border-color: transparent transparent #555 transparent;
+	border-color: transparent transparent white transparent;
 	left: 14px;
 	top: -17px;
 	content: '';
@@ -629,19 +703,42 @@ a.currentLocation:hover {
 .tooltipTailFromabove {
 	position: absolute;
 	display: block;
-	border: 8px solid;
-	border-color: #555 transparent transparent;
 	left: 16px;
 	content: '';
-	bottom: -15px;
+	bottom: 0;
 	z-index: 201;
+}
+
+.tooltipTailFromabove:after, .tooltipTailFromabove:before {
+	top: -1px;
+	left: 50%;
+	border: solid transparent;
+	content: " ";
+	height: 0;
+	width: 0;
+	position: absolute;
+	pointer-events: none;
+}
+
+.tooltipTailFromabove:after {
+	border-color: rgba(0, 0, 0, 0);
+	border-top-color: white;
+	border-width: 8px;
+	margin-left: -8px;
+}
+
+.tooltipTailFromabove:before {
+	border-color: rgba(0, 0, 0, 0);
+	border-top-color: #dcd9df;
+	border-width: 9px;
+	margin-left: -9px;
 }
 
 .tooltipTailBorderFromabove {
 	position: absolute;
 	display: block;
 	border: 10px solid;
-	border-color: #555 transparent transparent;
+	border-color: white transparent transparent;
 	left: 14px;
 	bottom: -17px;
 	content: '';
