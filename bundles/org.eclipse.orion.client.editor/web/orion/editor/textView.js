@@ -5000,6 +5000,66 @@ define("orion/editor/textView", [ //$NON-NLS-0$
 			
 			this._contextMenu = contextMenu;
 		},
+		_createContextMenu: function() {
+			//function called when the context menu is triggered to set the nav selection properly
+			var contextMenuTriggered = function(eventWrapper) {
+//				var navHandler = this.getNavHandler();
+//				var navDict = this.getNavDict();
+//				var event = eventWrapper.event;
+//				var item = null;
+//				
+//				if (event.target) {
+//					var node = event.target;
+//					while (this._parentNode.contains(node)) {
+//						if ("TR" === node.nodeName) {	//$NON-NLS-0$ //TODO this is brittle, see if a better way exists
+//							var rowId = node.id;
+//							item = navDict.getValue(rowId);
+//							break;
+//						}
+//						node = node.parentNode;
+//					}
+//					
+//					if (item && !navHandler.isDisabled(item.rowDomNode)) {
+//						// only modify the selection if the item that the context menu
+//						// was triggered on isn't already part of the selection
+//						var existingSels = navHandler.getSelection();
+//						if (-1 === existingSels.indexOf(item.model)) {
+//							navHandler.cursorOn(item.model, true, false, true);
+//							navHandler.setSelection(item.model, false, true);
+//						}
+//					} else {
+//						// context menu was triggered on sidebar itself,
+//						// clear previous selections
+//						this.selection.setSelections(null);
+//						navHandler.refreshSelection(true, true);
+//					}
+//				}
+			}.bind(this);
+			
+			this._viewContextMenuNode = document.createElement("ul"); //$NON-NLS-0$
+			this._viewContextMenuNode.className = "dropdownMenu"; //$NON-NLS-0$
+			this._viewContextMenuNode.setAttribute("role", "menu"); //$NON-NLS-1$ //$NON-NLS-0$
+			this._viewContextMenuNode.id = this._clientDiv.id + "ContextMenu"; //$NON-NLS-0$
+		
+			this._parent.insertBefore(this._viewContextMenuNode, this._parent.firstChild);
+			
+			var populateFunction = (function() {
+				var item1 = this._contextMenu.appendMenuItem("test");
+				mDropdown.appendKeyBindingString(item1.firstElementChild, "Ctrl+N");
+				this._contextMenu.appendMenuItem("test2");
+				this._contextMenu.appendMenuItem("test3");
+			}).bind(this);
+			
+			var contextMenu = new mContextMenu.ContextMenu({
+				dropdown: this._viewContextMenuNode,
+				triggerNode: this._clientDiv,
+				populate: populateFunction
+			});
+			
+			contextMenu.addEventListener("triggered", contextMenuTriggered); //$NON-NLS-0$
+			
+			this._contextMenu = contextMenu;
+		},
 		_defaultOptions: function() {
 			return {
 				parent: {value: undefined, update: null},
